@@ -1,0 +1,139 @@
+:root {
+  font-family: 'Trebuchet MS', 'Nunito', 'Arial Rounded MT Bold', sans-serif;
+  line-height: 1.4;
+  font-weight: 600;
+  color: #163443;
+  background: linear-gradient(180deg, #e9f4ff 0%, #f6fbff 100%);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.kws-card {
+  width: 100%;
+  max-width: 420px;
+  background: #ffffff;
+  border: 3px solid #9fd0ff;
+  border-radius: 28px;
+  padding: 18px 16px 20px;
+  box-shadow: 0 12px 30px rgba(58, 120, 188, 0.2);
+}
+
+.top-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.status-badge {
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  background: #dbeeff;
+  color: #1f4f81;
+}
+
+.progress-label {
+  font-size: 0.82rem;
+  color: #3e6880;
+}
+
+.progress-track {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.progress-dot {
+  height: 10px;
+  border-radius: 999px;
+  background: #dce9ef;
+}
+
+.progress-dot.is-active {
+  background: #2f8dff;
+}
+
+.mission-card {
+  margin-top: 16px;
+  border-radius: 22px;
+  background: #edf5ff;
+  border: 2px solid #b7d7ff;
+  padding: 14px 14px 16px;
+}
+
+.mission-label {
+  margin: 0;
+  color: #2a6e8f;
+  font-size: 0.82rem;
+}
+
+.mission-keyword {
+  margin: 8px 0 0;
+  font-size: 1.7rem;
+  line-height: 1.15;
+  color: #0f3554;
+}
+
+.record-button {
+  margin-top: 18px;
+  width: 100%;
+  min-height: 72px;
+  border: 0;
+  border-radius: 999px;
+  background: #2f8dff;
+  color: #ffffff;
+  font-size: 1.2rem;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 7px 0 #1d6dd1;
+  transition: transform 120ms ease, filter 120ms ease;
+}
+
+.record-button:hover {
+  filter: brightness(1.02);
+}
+
+.record-button:active {
+  transform: translateY(2px);
+}
+
+.result-card {
+  margin-top: 18px;
+  border-radius: 20px;
+  background: #f1f7ff;
+  border: 2px solid #c8e0ff;
+  padding: 14px;
+  text-align: center;
+}
+
+.result-emoji {
+  margin: 0;
+  font-size: 1.8rem;
+}
+
+.result-message {
+  margin: 8px 0 0;
+  font-size: 0.98rem;
+  color: #214d7d;
+}
