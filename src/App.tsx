@@ -7,38 +7,7 @@ type Feedback = {
   tips: string[]
 }
 
-const getDeniedTips = (errorName: string | null): Feedback => {
-  if (errorName === 'NotAllowedError' || errorName === 'SecurityError') {
-    return {
-      emoji: '🚫',
-      message: '마이크 권한이 아직 꺼져 있어요. 설정에서 허용하면 바로 녹음할 수 있어요.',
-      tips: [
-        '주소창 자물쇠 아이콘에서 마이크 권한을 "허용"으로 바꿔주세요.',
-        'https 환경(또는 localhost)에서만 마이크 권한 요청이 가능해요.',
-      ],
-    }
-  }
-
-  if (errorName === 'NotFoundError') {
-    return {
-      emoji: '🎧',
-      message: '사용 가능한 마이크를 찾지 못했어요.',
-      tips: [
-        '이어폰/외장 마이크 연결 상태를 확인해 주세요.',
-        '다른 앱이 오디오 장치를 사용 중이면 종료 후 재시도해 주세요.',
-      ],
-    }
-  }
-
-  return {
-    emoji: '🤔',
-    message: '마이크를 준비하는 중 문제가 생겼어요.',
-    tips: [
-      '브라우저 권한과 https 환경을 확인해 주세요.',
-      '문제가 계속되면 브라우저를 다시 열고 재시도해 주세요.',
-    ],
-  }
-}
+const formatSeconds = (ms: number) => (ms / 1000).toFixed(1)
 
 function App() {
   const {
@@ -47,63 +16,115 @@ function App() {
     audioBlob,
     audioUrl,
     errorName,
-    elapsedSeconds,
+    elapsedMs,
+    measuredDurationMs,
+    durationDiffMs,
     mimeType,
-    requestMicAccess,
+    maxDurationMs,
     startRecording,
-    stopRecording,
     retry,
-  } = useRecorder()
+  } = useRecorder({ maxDurationMs: 2000, durationToleranceMs: 220 })
+
+  const progressPercent = Math.min((elapsedMs / maxDurationMs) * 100, 100)
 
   const feedback = useMemo<Feedback>(() => {
     if (status === RecorderStatus.Requesting) {
       return {
         emoji: '🫡',
-        message: '권한 요청 중이에요. 브라우저 팝업에서 허용을 눌러주세요.',
-        tips: ['팝업이 안 보이면 주소창 권한 아이콘을 확인해 주세요.'],
+        message: '마이크 권한 요청 중이에요. 팝업에서 허용을 눌러주세요.',
+        tips: ['권한 허용 후 자동으로 2.0초 녹음 미션을 시작할 수 있어요.'],
       }
     }
 
     if (status === RecorderStatus.Ready) {
       return {
-        emoji: '🎤',
-        message: 'MicReady! 이제 녹음 시작 버튼으로 실제 녹음을 진행할 수 있어요.',
-        tips: ['지금 단계에서는 MediaRecorder로 음성 Blob만 생성합니다.'],
+        emoji: '🎯',
+        message: '준비 완료! 2초 동안 키워드를 또렷하게 말해볼까요?',
+        tips: ['시작하면 2.0초 뒤 자동 종료돼요. 중간 중지는 불가능해요.'],
       }
     }
 
     if (status === RecorderStatus.Recording) {
       return {
         emoji: '🔥',
-        message: '녹음 진행 중! 천천히 또렷하게 말해보세요.',
-        tips: ['중지 버튼을 누르면 즉시 미리 듣기 플레이어가 생성돼요.'],
+        message: '좋아요! 지금은 자동 녹음 중이에요. 2초만 집중해서 말해요.',
+        tips: ['버튼은 잠시 잠겨 있어요. 완료되면 바로 결과를 보여줄게요.'],
       }
     }
 
-    if (status === RecorderStatus.Stopped) {
+    if (status === RecorderStatus.Processing) {
+      return {
+        emoji: '⏳',
+        message: '길이를 확인하는 중이에요. 잠깐만 기다려주세요.',
+        tips: ['2.0초 기준에서 크게 벗어나면 재녹음을 안내해요.'],
+      }
+    }
+
+    if (status === RecorderStatus.Result) {
       return {
         emoji: '🌟',
-        message: '녹음 완료! 아래에서 바로 재생해볼 수 있어요.',
-        tips: ['다시 녹음 시작을 누르면 이전 녹음은 새 Blob으로 교체됩니다.'],
+        message: '완료! 2초 미션 성공이에요. 정말 잘했어요!',
+        tips: ['아래 미리듣기로 확인하고, 필요하면 다시 녹음해도 돼요.'],
       }
     }
 
-    if (status === RecorderStatus.MicDenied || status === RecorderStatus.Error) {
-      return getDeniedTips(errorName)
+    if (status === RecorderStatus.DurationRejected) {
+      return {
+        emoji: '🛠️',
+        message: '이번 샘플 길이가 2.0초 기준에서 많이 벗어났어요.',
+        tips: [
+          '앱은 학습 데이터 통일성을 위해 이 샘플을 REJECT 처리했어요.',
+          '조용한 환경에서 다시 한번 또렷하게 2초 발화를 시도해 주세요.',
+        ],
+      }
+    }
+
+    if (status === RecorderStatus.MicDenied) {
+      return {
+        emoji: '🚫',
+        message: '마이크 접근이 거부됐어요.',
+        tips: [
+          '주소창 자물쇠 아이콘에서 마이크 권한을 "허용"으로 바꿔주세요.',
+          'https 환경(또는 localhost)에서만 마이크 권한 요청이 가능해요.',
+        ],
+      }
     }
 
     if (status === RecorderStatus.Unsupported) {
       return {
         emoji: '🧩',
-        message: '현재 브라우저에서 MediaRecorder를 지원하지 않아요.',
-        tips: ['최신 Chrome/Safari/Edge에서 다시 시도해 주세요.'],
+        message: '이 브라우저는 MediaRecorder 지원이 제한돼요.',
+        tips: [
+          'iOS Safari 일부 버전/인앱 브라우저에서 제약이 있을 수 있어요.',
+          '대체 녹음 경로(WebAudio 기반)는 추후 Task에서 제공 예정이에요.',
+        ],
+      }
+    }
+
+    if (status === RecorderStatus.Error) {
+      if (errorName === 'PermissionTimeoutError') {
+        return {
+          emoji: '⌛',
+          message: '권한 승인 후에도 장치 연결 응답이 지연되고 있어요.',
+          tips: [
+            'Chrome를 완전히 종료 후 다시 실행해 주세요.',
+            'OS(맥/윈도우) 설정에서 Chrome 마이크 권한이 켜져 있는지 확인해 주세요.',
+            '다른 앱이 마이크를 점유 중이면 종료 후 재시도해 주세요.',
+          ],
+        }
+      }
+
+      return {
+        emoji: '⚠️',
+        message: '녹음 처리 중 오류가 발생했어요.',
+        tips: ['브라우저를 새로고침한 뒤 다시 시도해 주세요.'],
       }
     }
 
     return {
       emoji: '🙂',
-      message: '녹음 시작을 누르면 마이크 권한 확인 후 녹음을 시작해요.',
-      tips: ['권한 허용 후 타이머가 올라가면 정상 녹음 중입니다.'],
+      message: '2초 고정 녹음 미션을 시작해 볼까요?',
+      tips: ['녹음을 시작하면 자동으로 2.0초 후 종료됩니다.'],
     }
   }, [errorName, status])
 
@@ -112,22 +133,18 @@ function App() {
       ? 2
       : status === RecorderStatus.Ready ||
           status === RecorderStatus.Recording ||
-          status === RecorderStatus.Stopped
+          status === RecorderStatus.Processing ||
+          status === RecorderStatus.Result ||
+          status === RecorderStatus.DurationRejected
         ? 3
         : 1
 
   const handleMainButtonClick = async () => {
-    if (status === RecorderStatus.Recording) {
-      stopRecording()
+    if (status === RecorderStatus.Recording || status === RecorderStatus.Processing) {
       return
     }
 
-    if (status === RecorderStatus.Ready || status === RecorderStatus.Stopped) {
-      await startRecording()
-      return
-    }
-
-    await requestMicAccess()
+    await startRecording()
   }
 
   return (
@@ -135,7 +152,7 @@ function App() {
       <section className="kws-card">
         <header className="top-panel">
           <span className="status-badge">{status}</span>
-          <span className="progress-label">Recorder</span>
+          <span className="progress-label">2.0s Mission</span>
         </header>
 
         <div className="progress-track" aria-hidden="true">
@@ -156,31 +173,35 @@ function App() {
         ) : null}
 
         <section className="mission-card">
-          <p className="mission-label">지금 미션</p>
-          <h1 className="mission-keyword">키워드 녹음하기</h1>
+          <p className="mission-label">오늘의 발화 미션</p>
+          <h1 className="mission-keyword">정확히 2.0초 말하기</h1>
         </section>
 
-        {status === RecorderStatus.Recording ? (
-          <section className="recording-live" aria-live="polite">
-            <p className="recording-title">녹음 진행중</p>
-            <p className="recording-timer">{elapsedSeconds}s</p>
-          </section>
-        ) : null}
+        <section className="duration-card" aria-live="polite">
+          <p className="duration-text">
+            {formatSeconds(Math.min(elapsedMs, maxDurationMs))}s / {formatSeconds(maxDurationMs)}s
+          </p>
+          <div className="duration-track">
+            <span className="duration-fill" style={{ width: `${progressPercent}%` }} />
+          </div>
+        </section>
 
         <button
           type="button"
           className={`record-button ${status === RecorderStatus.Recording ? 'is-recording' : ''}`}
           onClick={handleMainButtonClick}
-          disabled={status === RecorderStatus.Requesting}
+          disabled={status === RecorderStatus.Requesting || status === RecorderStatus.Recording}
         >
           {status === RecorderStatus.Requesting
             ? '권한 요청 중...'
             : status === RecorderStatus.Recording
-              ? '녹음 중지'
+              ? '2초 자동 녹음 진행중...'
               : '녹음 시작'}
         </button>
 
-        {(status === RecorderStatus.MicDenied || status === RecorderStatus.Error) && (
+        {(status === RecorderStatus.MicDenied ||
+          status === RecorderStatus.Error ||
+          status === RecorderStatus.DurationRejected) && (
           <button type="button" className="retry-button" onClick={retry}>
             재시도
           </button>
@@ -194,8 +215,12 @@ function App() {
             </audio>
             <p className="preview-meta">
               {audioBlob ? `${Math.round(audioBlob.size / 1024)}KB` : '0KB'} ·{' '}
-              {mimeType ?? 'default mime'}
+              {mimeType ?? 'default mime'} ·{' '}
+              {measuredDurationMs ? `${formatSeconds(measuredDurationMs)}s` : '길이 측정 불가'}
             </p>
+            {durationDiffMs !== null && (
+              <p className="duration-check">2.0s 편차: {(durationDiffMs / 1000).toFixed(3)}s</p>
+            )}
           </section>
         ) : null}
 
@@ -207,9 +232,12 @@ function App() {
               <li key={tip}>{tip}</li>
             ))}
           </ul>
-          {errorName && (status === RecorderStatus.MicDenied || status === RecorderStatus.Error) ? (
-            <p className="error-code">에러 코드: {errorName}</p>
-          ) : null}
+          {errorName && (
+            <p className="error-code">
+              에러 코드: {errorName}
+              {status === RecorderStatus.Unsupported ? ' (지원 안내를 확인해 주세요)' : ''}
+            </p>
+          )}
         </section>
       </section>
     </main>

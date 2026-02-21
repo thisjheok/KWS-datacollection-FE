@@ -106,6 +106,37 @@ body {
   color: #0f3554;
 }
 
+.duration-card {
+  margin-top: 14px;
+  border-radius: 16px;
+  background: #f8f1ff;
+  border: 2px solid #dec7ff;
+  padding: 10px;
+}
+
+.duration-text {
+  margin: 0;
+  font-size: 0.92rem;
+  color: #5e3d8a;
+  text-align: center;
+}
+
+.duration-track {
+  margin-top: 8px;
+  width: 100%;
+  height: 12px;
+  border-radius: 999px;
+  background: #e7d8fb;
+  overflow: hidden;
+}
+
+.duration-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #7f57d1 0%, #4c8dff 100%);
+  transition: width 100ms linear;
+}
+
 .record-button {
   margin-top: 18px;
   width: 100%;
@@ -209,6 +240,12 @@ body {
   font-size: 0.8rem;
 }
 
+.duration-check {
+  margin: 8px 0 0;
+  color: #266838;
+  font-size: 0.8rem;
+}
+
 .result-emoji {
   margin: 0;
   font-size: 1.8rem;
@@ -248,5 +285,21 @@ body {
   }
   100% {
     transform: scale(1);
+  }
+}
+
+@media (max-width: 420px) {
+  .kws-card {
+    padding: 16px 14px 18px;
+    border-radius: 24px;
+  }
+
+  .mission-keyword {
+    font-size: 1.45rem;
+  }
+
+  .record-button {
+    min-height: 66px;
+    font-size: 1.08rem;
   }
 }
