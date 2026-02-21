@@ -59,7 +59,7 @@ body {
 
 .progress-track {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 8px;
   margin-top: 12px;
 }
@@ -80,6 +80,17 @@ body {
   background: #edf5ff;
   border: 2px solid #b7d7ff;
   padding: 14px 14px 16px;
+}
+
+.stream-chip {
+  margin: 14px 0 0;
+  font-size: 0.82rem;
+  color: #1c5477;
+  background: #e7f8ff;
+  border: 2px solid #b8e7ff;
+  border-radius: 999px;
+  padding: 7px 10px;
+  text-align: center;
 }
 
 .mission-label {
@@ -114,8 +125,54 @@ body {
   filter: brightness(1.02);
 }
 
+.record-button.is-recording {
+  background: #ff5f54;
+  box-shadow: 0 7px 0 #d7463f;
+  animation: pulse 1.2s ease infinite;
+}
+
+.record-button:disabled {
+  cursor: wait;
+  filter: saturate(0.75);
+}
+
 .record-button:active {
   transform: translateY(2px);
+}
+
+.recording-live {
+  margin-top: 16px;
+  border-radius: 18px;
+  border: 2px dashed #ff9a94;
+  background: #fff1f0;
+  padding: 10px 12px;
+  text-align: center;
+}
+
+.recording-title {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #8a302b;
+}
+
+.recording-timer {
+  margin: 4px 0 0;
+  font-size: 1.6rem;
+  font-weight: 900;
+  color: #c23e36;
+}
+
+.retry-button {
+  margin-top: 10px;
+  width: 100%;
+  min-height: 52px;
+  border: 2px solid #2f8dff;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #1e65b5;
+  font-size: 1rem;
+  font-weight: 800;
+  cursor: pointer;
 }
 
 .result-card {
@@ -127,6 +184,31 @@ body {
   text-align: center;
 }
 
+.preview-card {
+  margin-top: 14px;
+  border-radius: 20px;
+  background: #ebfff0;
+  border: 2px solid #aae8bd;
+  padding: 12px;
+}
+
+.preview-title {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #1c6b3b;
+}
+
+.audio-player {
+  margin-top: 8px;
+  width: 100%;
+}
+
+.preview-meta {
+  margin: 8px 0 0;
+  color: #2d7d4a;
+  font-size: 0.8rem;
+}
+
 .result-emoji {
   margin: 0;
   font-size: 1.8rem;
@@ -136,4 +218,35 @@ body {
   margin: 8px 0 0;
   font-size: 0.98rem;
   color: #214d7d;
+}
+
+.helper-list {
+  margin: 12px 0 0;
+  padding-left: 18px;
+  text-align: left;
+  color: #2f5d88;
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
+
+.helper-list li + li {
+  margin-top: 5px;
+}
+
+.error-code {
+  margin: 10px 0 0;
+  font-size: 0.8rem;
+  color: #7f5a2f;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.015);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
