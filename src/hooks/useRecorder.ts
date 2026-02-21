@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { convertBlobTo16kMonoWav } from '../utils/audioUtils'
+import { analyzePcmForSpeechGate, type GateResult } from '../utils/gate'
 
 export const RecorderStatus = {
   Idle: 'Idle',
@@ -17,7 +19,6 @@ export type RecorderStatus = (typeof RecorderStatus)[keyof typeof RecorderStatus
 
 type UseRecorderOptions = {
   maxDurationMs?: number
-  durationToleranceMs?: number
 }
 
 const MIME_CANDIDATES = [
@@ -41,23 +42,6 @@ const pickSupportedMimeType = () => {
   return null
 }
 
-const measureDurationMs = async (blob: Blob): Promise<number | null> => {
-  if (blob.size === 0 || typeof window.AudioContext === 'undefined') {
-    return null
-  }
-
-  const context = new window.AudioContext()
-  try {
-    const buffer = await blob.arrayBuffer()
-    const decoded = await context.decodeAudioData(buffer)
-    return Math.round(decoded.duration * 1000)
-  } catch {
-    return null
-  } finally {
-    await context.close()
-  }
-}
-
 const log = (...args: unknown[]) => {
   console.log('[useRecorder]', ...args)
 }
@@ -70,8 +54,9 @@ type UseRecorderResult = {
   errorName: string | null
   elapsedMs: number
   measuredDurationMs: number | null
-  durationDiffMs: number | null
+  gateResult: GateResult | null
   mimeType: string | null
+  outputSampleRate: number | null
   maxDurationMs: number
   requestMicAccess: () => Promise<MediaStream | null>
   startRecording: () => Promise<void>
@@ -80,7 +65,6 @@ type UseRecorderResult = {
 
 export const useRecorder = (options?: UseRecorderOptions): UseRecorderResult => {
   const maxDurationMs = options?.maxDurationMs ?? 2000
-  const durationToleranceMs = options?.durationToleranceMs ?? 220
 
   const [status, setStatus] = useState<RecorderStatus>(RecorderStatus.Idle)
   const [stream, setStream] = useState<MediaStream | null>(null)
@@ -89,7 +73,8 @@ export const useRecorder = (options?: UseRecorderOptions): UseRecorderResult => 
   const [errorName, setErrorName] = useState<string | null>(null)
   const [elapsedMs, setElapsedMs] = useState(0)
   const [measuredDurationMs, setMeasuredDurationMs] = useState<number | null>(null)
-  const [durationDiffMs, setDurationDiffMs] = useState<number | null>(null)
+  const [gateResult, setGateResult] = useState<GateResult | null>(null)
+  const [outputSampleRate, setOutputSampleRate] = useState<number | null>(null)
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
@@ -249,7 +234,8 @@ export const useRecorder = (options?: UseRecorderOptions): UseRecorderResult => 
       clearAutoStop()
       setElapsedMs(0)
       setMeasuredDurationMs(null)
-      setDurationDiffMs(null)
+      setGateResult(null)
+      setOutputSampleRate(null)
       setAudioBlob(null)
       clearAudioUrl()
       setAudioUrl(null)
@@ -286,34 +272,41 @@ export const useRecorder = (options?: UseRecorderOptions): UseRecorderResult => 
           type: recorder.mimeType || mimeType || 'audio/webm',
         })
         log('recorder:blob_created', { size: resultBlob.size, chunks: chunksRef.current.length })
-        setAudioBlob(resultBlob)
+        chunksRef.current = []
 
-        const newUrl = URL.createObjectURL(resultBlob)
-        clearAudioUrl()
-        audioUrlRef.current = newUrl
-        setAudioUrl(newUrl)
-
-        const duration = await measureDurationMs(resultBlob)
-        if (!mountedRef.current) {
-          log('recorder:duration_after_unmount')
-          return
-        }
-        setMeasuredDurationMs(duration)
-        log('recorder:duration_measured', { durationMs: duration })
-
-        // 전략: Task3에서는 길이 보정을 하지 않고, 2.0s에서 크게 벗어난 샘플은 REJECT 처리.
-        // Task4(WAV/리샘플링)에서 pad/trim 및 포맷 정규화를 수행할 예정.
-        if (duration !== null) {
-          const diff = Math.abs(duration - maxDurationMs)
-          setDurationDiffMs(diff)
-          if (diff > durationToleranceMs) {
-            log('recorder:duration_rejected', { diff, durationToleranceMs })
-            setStatus(RecorderStatus.DurationRejected)
+        try {
+          const converted = await convertBlobTo16kMonoWav(resultBlob)
+          if (!mountedRef.current) {
+            log('recorder:conversion_after_unmount')
             return
           }
-        } else {
-          log('recorder:duration_unavailable')
-          setDurationDiffMs(null)
+
+          setAudioBlob(converted.blob)
+          setOutputSampleRate(converted.sampleRate)
+          const newUrl = URL.createObjectURL(converted.blob)
+          clearAudioUrl()
+          audioUrlRef.current = newUrl
+          setAudioUrl(newUrl)
+
+          setMeasuredDurationMs(converted.durationMs)
+          const gate = analyzePcmForSpeechGate(converted.pcm, converted.sampleRate)
+          setGateResult(gate)
+          log('recorder:duration_measured', {
+            durationMs: converted.durationMs,
+            sampleRate: converted.sampleRate,
+            gateDecision: gate.decision,
+            gateReason: gate.reason,
+          })
+        } catch (error) {
+          if (!mountedRef.current) {
+            log('recorder:conversion_error_after_unmount')
+            return
+          }
+          const name = error instanceof DOMException ? error.name : 'ConversionError'
+          log('recorder:conversion_error', { name })
+          setErrorName(name)
+          setStatus(RecorderStatus.Error)
+          return
         }
 
         log('recorder:result_ok')
@@ -367,7 +360,6 @@ export const useRecorder = (options?: UseRecorderOptions): UseRecorderResult => 
     clearAudioUrl,
     clearAutoStop,
     clearTimer,
-    durationToleranceMs,
     maxDurationMs,
     mimeType,
     requestMicAccess,
@@ -379,6 +371,7 @@ export const useRecorder = (options?: UseRecorderOptions): UseRecorderResult => 
   const retry = useCallback(async () => {
     log('retry:called')
     setErrorName(null)
+    setGateResult(null)
     if (!streamRef.current) {
       log('retry:request_mic_again')
       await requestMicAccess()
@@ -418,8 +411,9 @@ export const useRecorder = (options?: UseRecorderOptions): UseRecorderResult => 
     errorName,
     elapsedMs,
     measuredDurationMs,
-    durationDiffMs,
+    gateResult,
     mimeType,
+    outputSampleRate,
     maxDurationMs,
     requestMicAccess,
     startRecording,

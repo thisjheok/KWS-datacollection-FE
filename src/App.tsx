@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { RecorderStatus, useRecorder } from './hooks/useRecorder'
 
 type Feedback = {
@@ -18,12 +18,13 @@ function App() {
     errorName,
     elapsedMs,
     measuredDurationMs,
-    durationDiffMs,
-    mimeType,
+    gateResult,
+    outputSampleRate,
     maxDurationMs,
     startRecording,
     retry,
-  } = useRecorder({ maxDurationMs: 2000, durationToleranceMs: 220 })
+  } = useRecorder({ maxDurationMs: 2000 })
+  const [showDebugMetrics, setShowDebugMetrics] = useState(false)
 
   const progressPercent = Math.min((elapsedMs / maxDurationMs) * 100, 100)
 
@@ -55,27 +56,37 @@ function App() {
     if (status === RecorderStatus.Processing) {
       return {
         emoji: '⏳',
-        message: '길이를 확인하는 중이에요. 잠깐만 기다려주세요.',
-        tips: ['2.0초 기준에서 크게 벗어나면 재녹음을 안내해요.'],
+        message: '잠깐만요! 녹음 파일을 16kHz mono WAV로 정리하고 있어요.',
+        tips: ['거의 끝났어요. 변환이 완료되면 바로 미리듣기를 보여드릴게요.'],
       }
     }
 
     if (status === RecorderStatus.Result) {
+      if (gateResult?.decision === 'PASS') {
+        return {
+          emoji: '🥳',
+          message: gateResult.userMessage,
+          tips: ['아주 좋아요! 같은 톤으로 다음 샘플도 가볼까요?'],
+        }
+      }
+      if (gateResult?.decision === 'AMBIG') {
+        return {
+          emoji: '🙂',
+          message: gateResult.userMessage,
+          tips: ['좋은 시도예요. 한 번만 더 또렷하게 말하면 통과 가능해요!'],
+        }
+      }
+      if (gateResult?.decision === 'REJECT') {
+        return {
+          emoji: '🧃',
+          message: gateResult.userMessage,
+          tips: ['괜찮아요. 숨 고르고, 마이크 가까이에서 다시 해봐요!'],
+        }
+      }
       return {
         emoji: '🌟',
-        message: '완료! 2초 미션 성공이에요. 정말 잘했어요!',
-        tips: ['아래 미리듣기로 확인하고, 필요하면 다시 녹음해도 돼요.'],
-      }
-    }
-
-    if (status === RecorderStatus.DurationRejected) {
-      return {
-        emoji: '🛠️',
-        message: '이번 샘플 길이가 2.0초 기준에서 많이 벗어났어요.',
-        tips: [
-          '앱은 학습 데이터 통일성을 위해 이 샘플을 REJECT 처리했어요.',
-          '조용한 환경에서 다시 한번 또렷하게 2초 발화를 시도해 주세요.',
-        ],
+        message: '분석이 완료됐어요!',
+        tips: ['결과가 보이지 않으면 한 번 더 녹음해 주세요.'],
       }
     }
 
@@ -126,7 +137,7 @@ function App() {
       message: '2초 고정 녹음 미션을 시작해 볼까요?',
       tips: ['녹음을 시작하면 자동으로 2.0초 후 종료됩니다.'],
     }
-  }, [errorName, status])
+  }, [errorName, gateResult, status])
 
   const activeDotCount =
     status === RecorderStatus.Requesting
@@ -134,8 +145,7 @@ function App() {
       : status === RecorderStatus.Ready ||
           status === RecorderStatus.Recording ||
           status === RecorderStatus.Processing ||
-          status === RecorderStatus.Result ||
-          status === RecorderStatus.DurationRejected
+          status === RecorderStatus.Result
         ? 3
         : 1
 
@@ -190,18 +200,33 @@ function App() {
           type="button"
           className={`record-button ${status === RecorderStatus.Recording ? 'is-recording' : ''}`}
           onClick={handleMainButtonClick}
-          disabled={status === RecorderStatus.Requesting || status === RecorderStatus.Recording}
+          disabled={
+            status === RecorderStatus.Requesting ||
+            status === RecorderStatus.Recording ||
+            status === RecorderStatus.Processing
+          }
         >
           {status === RecorderStatus.Requesting
             ? '권한 요청 중...'
             : status === RecorderStatus.Recording
               ? '2초 자동 녹음 진행중...'
+              : status === RecorderStatus.Processing
+                ? 'WAV 변환 처리중...'
               : '녹음 시작'}
         </button>
 
-        {(status === RecorderStatus.MicDenied ||
-          status === RecorderStatus.Error ||
-          status === RecorderStatus.DurationRejected) && (
+        {status === RecorderStatus.Processing && (
+          <section className="processing-card" aria-live="polite">
+            <p className="processing-title">금방 끝나요. 소리를 예쁘게 다듬는 중이에요</p>
+            <div className="loading-dots" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </div>
+          </section>
+        )}
+
+        {(status === RecorderStatus.MicDenied || status === RecorderStatus.Error) && (
           <button type="button" className="retry-button" onClick={retry}>
             재시도
           </button>
@@ -214,12 +239,59 @@ function App() {
               브라우저가 오디오 재생을 지원하지 않습니다.
             </audio>
             <p className="preview-meta">
-              {audioBlob ? `${Math.round(audioBlob.size / 1024)}KB` : '0KB'} ·{' '}
-              {mimeType ?? 'default mime'} ·{' '}
+              {audioBlob ? `${Math.round(audioBlob.size / 1024)}KB` : '0KB'} · 16-bit PCM WAV ·{' '}
+              {outputSampleRate ? `${outputSampleRate}Hz mono` : 'sample rate unknown'} ·{' '}
               {measuredDurationMs ? `${formatSeconds(measuredDurationMs)}s` : '길이 측정 불가'}
             </p>
-            {durationDiffMs !== null && (
-              <p className="duration-check">2.0s 편차: {(durationDiffMs / 1000).toFixed(3)}s</p>
+            <a className="download-button" href={audioUrl} download="sample.wav">
+              WAV 다운로드 (sample.wav)
+            </a>
+            <p className="debug-caption">디버그용 파일 저장 버튼입니다.</p>
+
+            <label className="debug-toggle">
+              <input
+                type="checkbox"
+                checked={showDebugMetrics}
+                onChange={(event) => setShowDebugMetrics(event.target.checked)}
+              />
+              개발자 토글(디버그 보기)
+            </label>
+
+            {showDebugMetrics && gateResult && (
+              <dl className="debug-metrics">
+                <div>
+                  <dt>decision</dt>
+                  <dd>{gateResult.decision}</dd>
+                </div>
+                <div>
+                  <dt>reason</dt>
+                  <dd>{gateResult.reason}</dd>
+                </div>
+                <div>
+                  <dt>rms</dt>
+                  <dd>{gateResult.debugMetrics.rms.toFixed(4)}</dd>
+                </div>
+                <div>
+                  <dt>absMax</dt>
+                  <dd>{gateResult.debugMetrics.absMax.toFixed(4)}</dd>
+                </div>
+                <div>
+                  <dt>clipRatio</dt>
+                  <dd>{(gateResult.debugMetrics.clipRatio * 100).toFixed(3)}%</dd>
+                </div>
+                <div>
+                  <dt>speechRatio</dt>
+                  <dd>{(gateResult.debugMetrics.speechRatio * 100).toFixed(1)}%</dd>
+                </div>
+                <div>
+                  <dt>firstSpeechMs</dt>
+                  <dd>{gateResult.debugMetrics.firstSpeechMs ?? '-'}</dd>
+                </div>
+                <div>
+                  <dt>lastSpeechMs</dt>
+                  <dd>{gateResult.debugMetrics.lastSpeechMs ?? '-'}</dd>
+                </div>
+              </dl>
             )}
           </section>
         ) : null}
@@ -238,6 +310,19 @@ function App() {
               {status === RecorderStatus.Unsupported ? ' (지원 안내를 확인해 주세요)' : ''}
             </p>
           )}
+
+          {status === RecorderStatus.Result && gateResult?.decision === 'PASS' && (
+            <button type="button" className="cta-button is-pass" onClick={startRecording}>
+              다음!
+            </button>
+          )}
+
+          {status === RecorderStatus.Result &&
+            (gateResult?.decision === 'AMBIG' || gateResult?.decision === 'REJECT') && (
+              <button type="button" className="cta-button is-retry" onClick={startRecording}>
+                다시 말하기
+              </button>
+            )}
         </section>
       </section>
     </main>
